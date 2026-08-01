@@ -1,18 +1,18 @@
 # IBD T-Cell Marker Analysis
 
-Marker-focused analysis of intestinal CD3+ T cells from patients with Crohn's disease (CD), ulcerative colitis (UC), and non-IBD controls. This repository was created for the C&SBio 10 Group 1 project.
+Marker-focused analysis of intestinal CD3+ T cells from patients with Crohn's disease (CD), ulcerative colitis (UC), and non-IBD controls. This repository was created for the C&S Bio 10 Group 1 project.
 
 ## Research question
 
-Do intestinal T cells from CD, UC, and control samples differ in selected marker patterns, especially in the frequency of cells with a Crohn's-associated tissue-resident memory T-cell phenotype?
+Do intestinal T cells from CD, UC, and control samples differ in selected marker patterns?
 
-The project uses a simplified **CDpop-like** definition:
+The original study identified a specific group of T cells that was more common in Crohn’s disease and referred to it as **CDpop**. These cells belong to the broader CD3⁺ T-cell population but also express CD4 and a particular combination of other markers.
 
 ```
 CD4+ CD103+ CD161+ CCR5+ CD27- CCR7-
 ```
 
-This detected/not-detected rule is an approximation of the original study's gating and clustering procedure.
+For each marker, “positive” means that its measured value was above the selected detection threshold, while “negative” means that it was below the threshold. Therefore, a CDpop-like cell had detectable CD4, CD103, CD161, and CCR5, but did not have detectable CD27 or CCR7.
 
 ## Dataset
 
