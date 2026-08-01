@@ -88,7 +88,3 @@ The original paper describes Crohn's-associated CD4+ tissue-resident memory T ce
 ## Contributors
 
 C&SBio 10 Group 1: Isabella Chavez, Jiayan Li, Eason Luo, and Alex Young.
-
-## Reproducibility status
-
-This repository currently provides project documentation. Add the reviewed notebooks/R Markdown files, environment specifications, and authorized non-sensitive outputs in follow-up commits before treating it as a fully reproducible analysis package.
