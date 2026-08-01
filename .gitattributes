@@ -1,0 +1,3 @@
+*.csv.gz binary
+data/processed/*.csv -diff
+*.pdf binary

@@ -1,0 +1,513 @@
+---
+title: "comparisonNew"
+output: html_document
+---
+
+
+
+```{r}
+# ----  LOAD PACKAGES AND DATA ---- 
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+combined_data <- read.csv("UC_CK_CD.csv")
+```
+
+
+```{r}
+# ---- CHECK METADATA ----
+table(combined_data$Condition)
+table(combined_data$Sample)
+
+table(
+  combined_data$Sample,
+  combined_data$Condition
+)
+```
+
+
+
+```{r}
+# ----  CLEAN CONDITION LABELS ----
+combined_data <- combined_data |>
+  mutate(
+    Condition = recode(
+      Condition,
+      "Chrons_Disease" = "CD",
+      "Control_samples" = "Control",
+      "Ulcerative_colitis" = "UC"
+    ),
+    Condition = factor(
+      Condition,
+      levels = c("Control", "CD", "UC")
+    )
+  )
+
+table(combined_data$Condition)
+```
+
+
+```{r}
+# ----IDENTIFY ORIGINAL FEATURE COLUMNS ----
+
+metadata_cols <- c(
+  "Cell_Index",
+  "Sample",
+  "Condition"
+)
+
+feature_cols <- setdiff(
+  colnames(combined_data),
+  metadata_cols
+)
+
+# Keep only numeric features
+feature_cols <- feature_cols[
+  sapply(combined_data[feature_cols], is.numeric)
+]
+
+length(feature_cols)
+head(feature_cols)
+
+```
+
+```{r}
+# ---- BASIC CELL-LEVEL QC ----
+combined_data <- combined_data |>
+  mutate(
+    total_counts = rowSums(
+      across(all_of(feature_cols)),
+      na.rm = TRUE
+    ),
+
+    n_detected_features = rowSums(
+      across(all_of(feature_cols)) > 0,
+      na.rm = TRUE
+    )
+  )
+```
+
+
+
+```{r}
+# ---- SAMPLE SUMMARY TABLE ----
+sample_summary <- combined_data |>
+  group_by(Sample, Condition) |>
+  summarise(
+    n_cells = n(),
+    median_total_counts = median(
+      total_counts,
+      na.rm = TRUE
+    ),
+    median_detected_features = median(
+      n_detected_features,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+sample_summary
+```
+
+```{r}
+# ---- FIGURE0: CELLS PER SAMPLE ----
+
+figure0 <- ggplot(
+  sample_summary,
+  aes(
+    x = Sample,
+    y = n_cells,
+    fill = Condition
+  )
+) +
+  geom_col() +
+  labs(
+    title = "Number of cells in each sample",
+    x = "Sample",
+    y = "Number of cells",
+    fill = "Condition"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+figure0
+```
+**Figure description:** This bar plot shows the number of cells retained from each of the 12 samples after preprocessing. Bars are colored by condition. Cell counts vary across samples, so later biological comparisons were summarized at the sample level to prevent samples with more cells from dominating the results.
+
+
+```{r}
+# ---- SELECT CORE MARKER FEATURES ----
+markers <- c(
+  CD4 = "CD4.SK3.CD4.AHS0032.pAbO",
+  CD103 = "CD103.ITGAE.AHS0001.pAbO",
+  CD161 = "CD161.DX12.KLRB1.AHS0002.pAbO",
+  CCR5 = "CCR5.NM_000579.3.Reference_end",
+  CCR7 = "CCR7.NM_001838.3.Reference_end",
+  CD27 = "CD27.M.T271.CD27.AHS0025.pAbO",
+  IFNG = "IFNG.NM_000619.2.Reference_end",
+  GZMA = "GZMA.NM_006144.3.Reference_end"
+)
+```
+
+
+```{r}
+
+# ---- LOG1P TRANSFORMATION ----
+for (marker_name in names(markers)) {
+
+  original_column <- markers[[marker_name]]
+
+  new_column <- paste0(
+    "log_",
+    marker_name
+  )
+
+  combined_data[[new_column]] <- log1p(
+    combined_data[[original_column]]
+  )
+}
+```
+
+
+
+```{r}
+# ---- CREATE LONG-FORMAT MARKER DATA ----
+marker_long <- combined_data |>
+  select(
+    Sample,
+    Condition,
+    all_of(log_marker_cols)
+  ) |>
+  pivot_longer(
+    cols = all_of(log_marker_cols),
+    names_to = "Marker",
+    values_to = "log_value"
+  ) |>
+  mutate(
+    Marker = gsub(
+      "log_",
+      "",
+      Marker
+    )
+  )
+
+head(marker_long)
+```
+```{r}
+# ---- SAMPLE-LEVEL MARKER SUMMARY ----
+
+marker_sample_summary <- marker_long |>
+  group_by(
+    Sample,
+    Condition,
+    Marker
+  ) |>
+  summarise(
+    percent_positive =
+      mean(
+        log_value > 0,
+        na.rm = TRUE
+      ) * 100,
+
+    median_signal =
+      median(
+        log_value,
+        na.rm = TRUE
+      ),
+
+    mean_signal =
+      mean(
+        log_value,
+        na.rm = TRUE
+      ),
+
+    .groups = "drop"
+  )
+
+head(marker_sample_summary)
+
+```
+
+```{r}
+# ---- FIGURE 1: SAMPLE-LEVEL MARKER POSITIVITY ----
+figure1 <- ggplot(
+  marker_sample_summary,
+  aes(
+    x = Condition,
+    y = percent_positive,
+    fill = Condition
+  )
+) +
+  geom_boxplot(
+    width = 0.55,
+    outlier.shape = NA
+  ) +
+  geom_jitter( #slightly shifts overlapping points for readability
+    width = 0.1,
+    size = 2
+  ) +
+  facet_wrap(
+    ~ Marker,
+    scales = "free_y",
+    ncol = 4
+  ) +
+  labs(
+    title = "Marker-positive cells across conditions",
+    x = "Condition",
+    y = "Positive cells per sample (%)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1
+    )
+  )
+
+figure1
+
+```
+**Figure description:** Each point represents the percentage of cells positive for one marker within one sample. Boxplots summarize the four sample-level values in each condition. Positivity was defined as a marker count greater than zero.
+
+```{r}
+# ---- DEFINE PAIRWISE COMPARISONS ----
+
+condition_pairs <- list(
+  c("CD", "Control"),
+  c("UC", "Control"),
+  c("CD", "UC")
+)
+```
+
+```{r}
+# ---- PAIRWISE WILCOXON TESTS ----
+
+wilcox_results <- data.frame()
+
+for (marker_name in unique(
+  marker_sample_summary$Marker
+)) {
+
+  marker_data <- marker_sample_summary |>
+    filter(
+      Marker == marker_name
+    )
+
+  for (comparison in condition_pairs) {
+
+    group1_name <- comparison[1]
+    group2_name <- comparison[2]
+
+    group1_values <- marker_data |>
+      filter(
+        Condition == group1_name
+      ) |>
+      pull(percent_positive)
+
+    group2_values <- marker_data |>
+      filter(
+        Condition == group2_name
+      ) |>
+      pull(percent_positive)
+
+    test_result <- wilcox.test(
+      group1_values,
+      group2_values,
+      exact = FALSE
+    )
+
+    new_result <- data.frame(
+      Marker = marker_name,
+      group1 = group1_name,
+      group2 = group2_name,
+      p_value = test_result$p.value
+    )
+
+    wilcox_results <- rbind(
+      wilcox_results,
+      new_result
+    )
+  }
+}
+```
+
+```{r}
+# ---- MULTIPLE-TESTING CORRECTION ----
+
+wilcox_results$p_adj_BH <- p.adjust(
+  wilcox_results$p_value,
+  method = "BH"
+)
+
+wilcox_results$significance <- case_when(
+  wilcox_results$p_adj_BH < 0.001 ~ "***",
+  wilcox_results$p_adj_BH < 0.01 ~ "**",
+  wilcox_results$p_adj_BH < 0.05 ~ "*",
+  TRUE ~ "ns"
+)
+
+wilcox_results <- wilcox_results |>
+  arrange(p_adj_BH)
+
+wilcox_results
+
+write.csv(
+  wilcox_results,
+  "marker_pairwise_wilcoxon_results.csv",
+  row.names = FALSE
+)
+```
+
+**Interpretation:** Although some differences were visible in the plots, none of the pairwise differences in sample-level marker positivity remained significant after Benjamini–Hochberg correction. This may reflect substantial sample-to-sample variability and the small sample size of four samples per condition.
+
+```{r}
+# ---- PCA OF SELECTED MARKERS ----
+
+pca_input <- combined_data |>
+  select(
+    all_of(log_marker_cols)
+  )
+
+complete_rows <- complete.cases(
+  pca_input
+)
+
+pca_input_complete <- pca_input[
+  complete_rows,
+]
+
+pca_result <- prcomp(
+  pca_input_complete,
+  center = TRUE,
+  scale. = TRUE
+)
+
+pca_df <- as.data.frame(
+  pca_result$x
+)
+
+pca_df$Condition <- combined_data$Condition[complete_rows]
+
+pca_df$Sample <- combined_data$Sample[complete_rows]
+
+
+# ---- FIGURE2: PCA ----
+
+figure2 <- ggplot(
+  pca_df,
+  aes(
+    x = PC1,
+    y = PC2,
+    color = Condition
+  )
+) +
+  geom_point(
+    alpha = 0.06,
+    size = 0.4
+  ) +
+  labs(
+    title = "PCA of selected marker features",
+    x = "PC1",
+    y = "PC2",
+    color = "Condition"
+  ) +
+  theme_minimal(base_size = 13)
+
+figure2
+```
+**Figure description:** PCA summarizes variation across cells using the selected marker features. Each point represents one cell and is colored by condition. PC1 and PC2 show the two largest linear sources of variation in the selected marker panel.
+
+**Interpretation:** Cells from CD, Control, and UC overlap substantially in PCA space, indicating that condition does not completely separate all intestinal T cells based on this selected marker panel. We moved to a more focused analysis of the paper-inspired CDpop-like subset.
+
+```{r}
+# ---- DEFINE CDPOP-LIKE CELLS ----
+
+combined_data <- combined_data |>
+  mutate(
+    CD4_pos = log_CD4 > 0,
+    CD103_pos = log_CD103 > 0,
+    CD161_pos = log_CD161 > 0,
+    CCR5_pos = log_CCR5 > 0,
+
+    CD27_neg = log_CD27 == 0,
+    CCR7_neg = log_CCR7 == 0,
+
+    CDpop_like =
+      CD4_pos &
+      CD103_pos &
+      CD161_pos &
+      CCR5_pos &
+      CD27_neg &
+      CCR7_neg
+  )
+```
+
+
+```{r}
+# ---- SAMPLE-LEVEL CDPOP-LIKE FREQUENCY ----
+
+cdpop_sample_summary <- combined_data |>
+  group_by(
+    Sample,
+    Condition
+  ) |>
+  summarise(
+    n_cells = n(),
+
+    n_CDpop_like =
+      sum(
+        CDpop_like,
+        na.rm = TRUE
+      ),
+
+    percent_CDpop_like =
+      mean(
+        CDpop_like,
+        na.rm = TRUE
+      ) * 100,
+
+    .groups = "drop"
+  )
+
+cdpop_sample_summary
+```
+```{r}
+# ---- FIGURE3: CDPOP-LIKE FREQUENCY ----
+
+figure3 <- ggplot(
+  cdpop_sample_summary,
+  aes(
+    x = Condition,
+    y = percent_CDpop_like,
+    fill = Condition
+  )
+) +
+  geom_boxplot(
+    width = 0.55,
+    outlier.shape = NA
+  ) +
+  geom_jitter(
+    width = 0.1,
+    size = 2.5
+  ) +
+  labs(
+    title = "CDpop-like cell frequency by condition",
+    x = "Condition",
+    y = "CDpop-like cells per sample (%)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "none"
+  )
+
+figure3
+```
+**Figure description:** Each point represents the percentage of cells classified as CDpop-like within one sample. CDpop-like cells were approximated using the marker pattern CD4+ CD103+ CD161+ CCR5+ CD27− CCR7−. Boxplots summarize the four samples in each condition. 

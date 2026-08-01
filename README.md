@@ -26,7 +26,7 @@ This detected/not-detected rule is an approximation of the original study's gati
 
 Each row represents one cell. Core metadata fields include `Cell_Index`, `Sample`, and `Condition`.
 
-> The raw and processed datasets are not committed to this repository. Obtain source data through GEO or the authorized project Drive and review usage/privacy requirements before adding data.
+The repository includes the 12 compressed source tables under `data/raw/` and the combined processed table under `data/processed/`. The public source dataset remains available through GEO for provenance and independent retrieval.
 
 ## Marker panel
 
@@ -67,7 +67,7 @@ The original paper describes Crohn's-associated CD4+ tissue-resident memory T ce
 - Cell-level tests can produce very small p-values because of the large number of cells; biological effect sizes and patient-level replication remain essential.
 - Unequal cell counts across samples and conditions may affect summaries.
 
-## Project artifacts identified in Drive
+## Repository contents
 
 ### Code
 
@@ -82,9 +82,14 @@ The original paper describes Crohn's-associated CD4+ tissue-resident memory T ce
 - C&SBio 10 Presentation
 - `Presentation.pdf`
 - `FIGURES.pdf`
-- Original and preprocessed dataset folders
+- `data/raw/`: 12 compressed single-sample CSV files
+- `data/processed/UC_CK_CD.csv`: combined analysis table
 - Project `README.txt`
 
 ## Contributors
 
 C&SBio 10 Group 1: Isabella Chavez, Jiayan Li, Eason Luo, and Alex Young.
+
+## Reproducibility status
+
+This repository includes the source data tables, processed table, analysis notebooks/R Markdown, and supporting documents found in the project Drive. Environment lockfiles and a single end-to-end execution entry point are not yet included, so exact computational reproduction may still require package-version reconstruction.
